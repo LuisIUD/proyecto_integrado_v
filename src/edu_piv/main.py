@@ -1,35 +1,40 @@
+import os
+import pandas as pd
 from logger import Logger
 from collector import Collector
-import pandas as pd
-import os
+import sqlite3
 
 def main():
-    # Inicializar el logger
     logger = Logger()
-    logger.info("Inicializando clase Logger")
+    logger.info('Main', 'main', 'Inicializando el proceso de descarga y almacenamiento.')
 
-    # Crear instancia del recolector de datos
+    # Instanciamos el colector para descargar los datos
     collector = Collector(logger=logger)
+    df = collector.collertor_data()
 
-    # Descargar los datos
-    df = collector.collector_data()
+    # Definir el path para CSV
+    csv_path = "src/edu_piv/static/data/goog_data.csv"
 
-    # Verificar si se obtuvieron datos y guardarlos
-    if df.empty:
-        print("[ADVERTENCIA] No se descargaron datos. Revisa los logs.")
-        logger.warning("No se descargaron datos. El DataFrame está vacío.")
-    else:
-        print("[OK] Datos descargados exitosamente.")
-        logger.info("Datos descargados exitosamente. Guardando en CSV...")
+    # Si ya existe el archivo CSV, leemos el histórico y agregamos los nuevos datos sin perder el histórico
+    if os.path.exists(csv_path):
+        df_historico = pd.read_csv(csv_path)
+        df = pd.concat([df_historico, df], ignore_index=True)
+        df.drop_duplicates(subset=['fecha'], inplace=True)  # Evita duplicados por fecha
+        df.sort_values(by='fecha', inplace=True)
+        logger.info('Main', 'main', 'Datos históricos preservados y nuevos datos agregados.')
 
-        # Asegurar que el directorio exista
-        output_dir = "src/edu_piv/static/data"
-        os.makedirs(output_dir, exist_ok=True)
+    # Guardar el DataFrame actualizado en el archivo CSV
+    df.to_csv(csv_path, index=False)
+    logger.info('Main', 'main', f'Datos guardados en {csv_path}.')
 
-        # Guardar archivo
-        df.to_csv(f"{output_dir}/goog_data.csv", index=False)
+    # Opción de guardar en base de datos SQLite (opcional)
+    db_path = 'src/edu_piv/static/data/historical.db'
+    conn = sqlite3.connect(db_path)
+    df.to_sql('historical_data', conn, if_exists='replace', index=False)
+    conn.close()
+    logger.info('Main', 'main', f'Datos guardados en SQLite en {db_path}.')
 
-        logger.info("Archivo CSV guardado correctamente.")
+    print("Datos descargados y almacenados exitosamente.")
 
 if __name__ == "__main__":
     main()
