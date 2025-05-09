@@ -16,7 +16,7 @@ class Collector:
         if not os.path.exists('/src/edu_piv/static/data'):
             os.makedirs('/src/edu_piv/static/data')
 
-    def collertor_data(self):
+    def collector_data(self):
         try:
           df = pd.DataFrame()
           headers= {
