@@ -1,6 +1,7 @@
 from logger import Logger
 from collector import Collector
 import pandas as pd
+import os
 
 def main():
     # Inicializar el logger
@@ -21,8 +22,12 @@ def main():
         print("[OK] Datos descargados exitosamente.")
         logger.info("Datos descargados exitosamente. Guardando en CSV...")
 
-        # Guardar los datos en CSV con ruta relativa
-        df.to_csv("src/edu_piv/static/data/goog_data.csv", index=False)
+        # Asegurar que el directorio exista
+        output_dir = "src/edu_piv/static/data"
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Guardar archivo
+        df.to_csv(f"{output_dir}/goog_data.csv", index=False)
 
         logger.info("Archivo CSV guardado correctamente.")
 
