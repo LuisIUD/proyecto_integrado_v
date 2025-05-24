@@ -1,96 +1,97 @@
 import os
-import pickle
-import pandas as pd
+import joblib
 import numpy as np
+import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from logger import Logger
 
-class Modeller:
-    def __init__(self, logger):
-        self.logger = logger
-        self.model_dir = "src/edu_piv/static/models/"
-        self.model_path = os.path.join(self.model_dir, "model.pkl")
-        if not os.path.exists(self.model_dir):
-            os.makedirs(self.model_dir)
 
-    def preparar_df(self, df, ticker='GOOG'):
+class Modeller:
+    def __init__(self, logger: Logger):
+        self.logger = logger
+        self.model = None
+
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        models_dir = os.path.join(base_path, 'static', 'models')
+        os.makedirs(models_dir, exist_ok=True)
+        self.model_path = os.path.join(models_dir, 'model.pkl')
+
+    def preparar_datos(self, df: pd.DataFrame, ticker: str = 'GOOG'):
         try:
-            self.logger.debug("Modeller", "preparar_df", f"Columnas recibidas: {df.columns.tolist()}")
             df = df[df['ticker'] == ticker].copy()
             df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
-            df = df.dropna(subset=['fecha'])
-            df = df.sort_values(by='fecha').reset_index(drop=True)
+            df = df.dropna(subset=['fecha']).sort_values(by='fecha').reset_index(drop=True)
 
-            # Seleccionar solo columnas numéricas para entrenamiento
-            df_numerico = df.select_dtypes(include=[np.number])
-            self.logger.debug("Modeller", "preparar_df", f"Columnas numéricas: {df_numerico.columns.tolist()}")
-            self.logger.debug("Modeller", "preparar_df", f"Shape de df_numerico antes de objetivo: {df_numerico.shape}")
+            features = [
+                'retorno_log_diario',
+                'media_movil_7d',
+                'media_movil_30d',
+                'volatilidad_7d',
+                'volatilidad_30d'
+            ]
 
-            if 'cerrar' not in df_numerico.columns:
-                self.logger.error("Modeller", "preparar_df", "'cerrar' no está en columnas numéricas")
-                return pd.DataFrame(), pd.Series(), False, None
+            if not all(col in df.columns for col in features + ['cerrar']):
+                self.logger.error("Modeller", "preparar_datos", "Faltan columnas necesarias.")
+                return pd.DataFrame(), pd.Series(), False
 
-            # Crear variable objetivo: precio de cierre del día siguiente
-            df_numerico['objetivo'] = df_numerico['cerrar'].shift(-1)
-            df_numerico.dropna(inplace=True)
-
-            if df_numerico.empty:
-                self.logger.warning("Modeller", "preparar_df", "El DataFrame quedó vacío tras preparar variables.")
-                return pd.DataFrame(), pd.Series(), False, None
-
-            self.logger.debug("Modeller", "preparar_df", f"Shape final de df_numerico: {df_numerico.shape}")
-
-            X = df_numerico.drop(columns=['objetivo'])
-            y = df_numerico['objetivo']
-            return X, y, True, df
+            X = df[features]
+            y = df['cerrar']
+            return X, y, True
 
         except Exception as e:
-            self.logger.error("Modeller", "preparar_df", f"Error preparando dataset: {e}")
-            return pd.DataFrame(), pd.Series(), False, None
+            self.logger.error("Modeller", "preparar_datos", f"Error preparando datos: {e}")
+            return pd.DataFrame(), pd.Series(), False
 
-    def entrenar_df(self, df):
+    def entrenar(self, df: pd.DataFrame, ticker: str = 'GOOG'):
         try:
-            X, y, ok, _ = self.preparar_df(df)
-            if not ok:
+            X, y, valido = self.preparar_datos(df, ticker)
+            if not valido or X.empty or y.empty:
+                self.logger.error("Modeller", "entrenar", "Datos insuficientes o inválidos para entrenamiento.")
                 return False
 
-            self.logger.debug("Modeller", "entrenar_df", f"Shape de X: {X.shape}, Shape de y: {y.shape}")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
-            model.fit(X_train, y_train)
+            self.model = RandomForestRegressor(n_estimators=100, random_state=42)
+            self.model.fit(X_train, y_train)
 
-            y_pred = model.predict(X_test)
-            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-            self.logger.info("Modeller", "entrenar_df", f"Modelo entrenado con RMSE: {rmse:.4f}")
+            preds = self.model.predict(X_test)
+            rmse = np.sqrt(mean_squared_error(y_test, preds))
+            mae = mean_absolute_error(y_test, preds)
 
-            with open(self.model_path, 'wb') as f:
-                pickle.dump(model, f)
-
+            joblib.dump(self.model, self.model_path)
+            self.logger.info("Modeller", "entrenar", f"Modelo guardado en {self.model_path}")
+            self.logger.info("Modeller", "entrenar", f"RMSE: {rmse:.4f}, MAE: {mae:.4f}")
             return True
+
         except Exception as e:
-            self.logger.error("Modeller", "entrenar_df", f"Error entrenando modelo: {e}")
+            self.logger.error("Modeller", "entrenar", f"Error en entrenamiento: {e}")
             return False
 
-    def predecir_df(self, df):
+    def predecir(self, df: pd.DataFrame, ticker: str = 'GOOG'):
         try:
-            X, _, ok, df_ordenado = self.preparar_df(df)
-            if not ok:
-                return df, False, 0, "", 0
+            if self.model is None:
+                self.model = joblib.load(self.model_path)
+                self.logger.info("Modeller", "predecir", f"Modelo cargado desde {self.model_path}")
 
-            with open(self.model_path, 'rb') as f:
-                model = pickle.load(f)
+            features = [
+                'retorno_log_diario',
+                'media_movil_7d',
+                'media_movil_30d',
+                'volatilidad_7d',
+                'volatilidad_30d'
+            ]
 
-            ultima_fila = X.tail(1)
-            prediccion = model.predict(ultima_fila)[0]
-            fecha_prediccion = df_ordenado['fecha'].iloc[-1]
-            fila = df_ordenado.shape[0] - 1
+            df_ticker = df[df['ticker'] == ticker].copy()
+            X_new = df_ticker[features].tail(1)
 
-            self.logger.info("Modeller", "predecir_df", f"Predicción realizada: {prediccion:.4f}")
-            return df, True, prediccion, fecha_prediccion.strftime('%Y-%m-%d'), fila
+            pred = self.model.predict(X_new)[0]
+            fecha = df_ticker['fecha'].max().strftime('%Y-%m-%d')
+
+            self.logger.info("Modeller", "predecir", f"Predicción: {pred:.4f} para fecha: {fecha}")
+            return pred, fecha
 
         except Exception as e:
-            self.logger.error("Modeller", "predecir_df", f"Error en predicción: {e}")
-            return df, False, 0, "", 0
+            self.logger.error("Modeller", "predecir", f"Error en predicción: {e}")
+            return None, ""
