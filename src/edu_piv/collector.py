@@ -27,14 +27,17 @@ class Collector:
                 self.logger.error("Collector", "_scrape_yahoo_table", f"Tabla no encontrada para {ticker}")
                 return pd.DataFrame()
 
-            headerss = [th.get_text(strip=True) for th in table.thead.find_all('th')]
+            headers_raw = [th.get_text(strip=True) for th in table.thead.find_all('th')]
             rows = []
             for tr in table.tbody.find_all('tr'):
                 columns = [td.get_text(strip=True) for td in tr.find_all('td')]
-                if len(columns) == len(headerss):
+                if len(columns) == len(headers_raw):
                     rows.append(columns)
 
-            df = pd.DataFrame(rows, columns=headerss).rename(columns={
+            df = pd.DataFrame(rows, columns=headers_raw)
+
+            # Renombrar columnas según Yahoo en español
+            df.rename(columns={
                 'Fecha': 'fecha',
                 'Abrir': 'abrir',
                 'Máx.': 'max',
@@ -42,14 +45,30 @@ class Collector:
                 'Cerrar*': 'cerrar',
                 'Cierre ajustado**': 'cierre_ajustado',
                 'Volumen': 'volumen'
-            })
+            }, inplace=True)
+
+            # Limpiar y estandarizar todos los nombres
+            df.columns = [col.strip().lower().replace(' ', '_').replace('*', '').replace('**', '') for col in df.columns]
+
+            # Corregir encabezados rotos si vienen de forma incorrecta
+            df.rename(columns={
+                'cerrarprecio_de_cierre_ajustado_para_splits.': 'cerrar',
+                'cierre_ajustadoprecio_de_cierre_ajustado_para_splits_y_distribuciones_de_dividendos_o_plusvalías.': 'cierre_ajustado'
+            }, inplace=True)
+
+            # Validar columnas mínimas requeridas
+            columnas_requeridas = ['fecha', 'abrir', 'max', 'min', 'cerrar', 'cierre_ajustado', 'volumen']
+            faltantes = [col for col in columnas_requeridas if col not in df.columns]
+            if faltantes:
+                self.logger.error("Collector", "_scrape_yahoo_table", f"Faltan columnas requeridas: {faltantes}")
+                return pd.DataFrame()
 
             df['ticker'] = ticker
 
-            # Normalizar números
+            # Limpiar y convertir números
             df = self._limpiar_numeros(df)
 
-            # Guardar CSV individual por ticker
+            # Guardar CSV individual
             output_path = f"src/edu_piv/static/data/{ticker.lower()}_datos.csv"
             df.to_csv(output_path, index=False)
             self.logger.info("Collector", "_scrape_yahoo_table", f"Datos guardados en {output_path}")
@@ -64,8 +83,8 @@ class Collector:
         columnas_numericas = ['abrir', 'max', 'min', 'cerrar', 'cierre_ajustado', 'volumen']
         for col in columnas_numericas:
             if col in df.columns:
-                df[col] = df[col].astype(str).str.replace('.', '', regex=False)  # elimina puntos (miles)
-                df[col] = df[col].str.replace(',', '.', regex=False)             # convierte coma decimal a punto
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False)  # elimina puntos de miles
+                df[col] = df[col].str.replace(',', '.', regex=False)             # cambia coma decimal a punto
                 df[col] = pd.to_numeric(df[col], errors='coerce')                # convierte a float
         return df
 
