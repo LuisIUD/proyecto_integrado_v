@@ -10,9 +10,9 @@ class CustomAdapter(logging.LoggerAdapter):
         return msg, kwargs
 
 class Logger:
-    def __init__(self):
+    def __init__(self, name="GOOGAnalysis"):  # <-- Ahora acepta nombre dinámico
         os.makedirs('logs', exist_ok=True)
-        log_file = f"logs/GOOG_analysis_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        log_file = f"logs/{name}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
         formatter = logging.Formatter(
             fmt='[%(asctime)s | %(name)s | %(class_name)s | %(function_name)s | %(levelname)s] %(message)s',
@@ -25,7 +25,7 @@ class Logger:
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
 
-        base_logger = logging.getLogger("GOOGAnalysis")
+        base_logger = logging.getLogger(name)  # <-- Usa el nombre dinámico
         base_logger.setLevel(logging.INFO)
         base_logger.addHandler(file_handler)
         base_logger.addHandler(console_handler)

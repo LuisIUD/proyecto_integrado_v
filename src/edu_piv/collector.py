@@ -50,13 +50,12 @@ class Collector:
             # Limpiar y estandarizar todos los nombres
             df.columns = [col.strip().lower().replace(' ', '_').replace('*', '').replace('**', '') for col in df.columns]
 
-            # Corregir encabezados rotos si vienen de forma incorrecta
+            # Corregir encabezados rotos
             df.rename(columns={
                 'cerrarprecio_de_cierre_ajustado_para_splits.': 'cerrar',
                 'cierre_ajustadoprecio_de_cierre_ajustado_para_splits_y_distribuciones_de_dividendos_o_plusvalías.': 'cierre_ajustado'
             }, inplace=True)
 
-            # Validar columnas mínimas requeridas
             columnas_requeridas = ['fecha', 'abrir', 'max', 'min', 'cerrar', 'cierre_ajustado', 'volumen']
             faltantes = [col for col in columnas_requeridas if col not in df.columns]
             if faltantes:
@@ -64,11 +63,8 @@ class Collector:
                 return pd.DataFrame()
 
             df['ticker'] = ticker
-
-            # Limpiar y convertir números
             df = self._limpiar_numeros(df)
 
-            # Guardar CSV individual
             output_path = f"src/edu_piv/static/data/{ticker.lower()}_datos.csv"
             df.to_csv(output_path, index=False)
             self.logger.info("Collector", "_scrape_yahoo_table", f"Datos guardados en {output_path}")
@@ -83,14 +79,19 @@ class Collector:
         columnas_numericas = ['abrir', 'max', 'min', 'cerrar', 'cierre_ajustado', 'volumen']
         for col in columnas_numericas:
             if col in df.columns:
-                df[col] = df[col].astype(str).str.replace('.', '', regex=False)  # elimina puntos de miles
-                df[col] = df[col].str.replace(',', '.', regex=False)             # cambia coma decimal a punto
-                df[col] = pd.to_numeric(df[col], errors='coerce')                # convierte a float
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False)
+                df[col] = df[col].str.replace(',', '.', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         return df
 
-    def collector_data(self):
+    def collector_data(self, tickers):
         df_list = []
-        for ticker, url in self.urls.items():
+        for ticker in tickers:
+            url = self.urls.get(ticker)
+            if not url:
+                self.logger.warning("Collector", "collector_data", f"No se encontró URL para {ticker}")
+                continue
+
             df = self._scrape_yahoo_table(url, ticker)
             if not df.empty:
                 df_list.append(df)
@@ -99,6 +100,6 @@ class Collector:
             self.logger.warning("Collector", "collector_data", "No se pudieron recolectar datos.")
             return pd.DataFrame()
 
-        df_all = pd.concat(df_list)
-        self.logger.info("Collector", "collector_data", f"Datos recolectados para tickers: {list(self.urls.keys())}")
+        df_all = pd.concat(df_list, ignore_index=True)
+        self.logger.info("Collector", "collector_data", f"Datos recolectados para tickers: {tickers}")
         return df_all

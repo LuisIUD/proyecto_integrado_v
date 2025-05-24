@@ -1,8 +1,9 @@
 import pandas as pd
+from datetime import datetime
 from collector import Collector
 from enricher import Enricher
 from modeller import Modeller
-from custom_logger import Logger  # Asegúrate de que este sea el nombre correcto
+from custom_logger import Logger
 
 def main():
     logger = Logger("GOOGAnalysis")
@@ -33,13 +34,12 @@ def main():
     print("Entrenamiento completado y modelo guardado")
 
     # Paso 4: Predicción
-    from datetime import datetime
     print("Iniciando predicción...")
     y_pred, fecha_pred = model.predecir(df_data)
 
-    if fecha_pred is None:
-        logger.error("Main", "main", "Fecha inválida para predicción")
-        print("No se pudo generar la predicción por fecha inválida.")
+    if fecha_pred is None or y_pred is None:
+        logger.error("Main", "main", "No se pudo generar la predicción.")
+        print("No se pudo generar la predicción.")
         return
 
     if isinstance(fecha_pred, str):
@@ -52,7 +52,7 @@ def main():
 
     print(f" Predicción del precio de cierre para {fecha_pred.date()}: {y_pred:.2f}")
 
-    # Puedes guardar la predicción si lo deseas:
+    # Guardar la predicción
     pred_df = pd.DataFrame([{
         'fecha': fecha_pred.date(),
         'prediccion': y_pred,
