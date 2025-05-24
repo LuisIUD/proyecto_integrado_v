@@ -48,6 +48,11 @@ class Modeller:
                 return False
 
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+            # Validación: asegurarse de que no haya NaN o infinitos antes de entrenar
+            assert np.isfinite(X_train.to_numpy()).all(), "X_train contiene valores NaN o infinitos"
+            assert np.isfinite(y_train.to_numpy()).all(), "y_train contiene valores NaN o infinitos"
+
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
 
