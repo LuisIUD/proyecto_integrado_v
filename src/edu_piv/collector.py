@@ -1,7 +1,7 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-from logger import Logger
+from edu_piv.custom_logger import Logger
 import os
 
 class Collector:

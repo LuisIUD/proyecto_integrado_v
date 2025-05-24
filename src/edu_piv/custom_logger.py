@@ -1,4 +1,4 @@
-from logger import Logger
+from edu_piv.custom_logger import Logger
 from collector import Collector
 from enricher import Enricher
 from modeller import Modeller
