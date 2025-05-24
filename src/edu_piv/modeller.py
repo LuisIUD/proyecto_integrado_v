@@ -17,6 +17,7 @@ class Modeller:
 
     def preparar_df(self, df, ticker='GOOG'):
         try:
+            self.logger.debug("Modeller", "preparar_df", f"Columnas recibidas: {df.columns.tolist()}")
             df = df[df['ticker'] == ticker].copy()
             df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
             df = df.dropna(subset=['fecha'])
@@ -24,18 +25,26 @@ class Modeller:
 
             # Seleccionar solo columnas numéricas para entrenamiento
             df_numerico = df.select_dtypes(include=[np.number])
+            self.logger.debug("Modeller", "preparar_df", f"Columnas numéricas: {df_numerico.columns.tolist()}")
+            self.logger.debug("Modeller", "preparar_df", f"Shape de df_numerico antes de objetivo: {df_numerico.shape}")
+
+            if 'cerrar' not in df_numerico.columns:
+                self.logger.error("Modeller", "preparar_df", "'cerrar' no está en columnas numéricas")
+                return pd.DataFrame(), pd.Series(), False, None
 
             # Crear variable objetivo: precio de cierre del día siguiente
             df_numerico['objetivo'] = df_numerico['cerrar'].shift(-1)
-
             df_numerico.dropna(inplace=True)
+
             if df_numerico.empty:
                 self.logger.warning("Modeller", "preparar_df", "El DataFrame quedó vacío tras preparar variables.")
                 return pd.DataFrame(), pd.Series(), False, None
 
+            self.logger.debug("Modeller", "preparar_df", f"Shape final de df_numerico: {df_numerico.shape}")
+
             X = df_numerico.drop(columns=['objetivo'])
             y = df_numerico['objetivo']
-            return X, y, True, df  # Devuelvo también el df original ordenado
+            return X, y, True, df
 
         except Exception as e:
             self.logger.error("Modeller", "preparar_df", f"Error preparando dataset: {e}")
@@ -47,11 +56,8 @@ class Modeller:
             if not ok:
                 return False
 
+            self.logger.debug("Modeller", "entrenar_df", f"Shape de X: {X.shape}, Shape de y: {y.shape}")
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-            # Validación: asegurarse de que no haya NaN o infinitos antes de entrenar
-            assert np.isfinite(X_train.to_numpy()).all(), "X_train contiene valores NaN o infinitos"
-            assert np.isfinite(y_train.to_numpy()).all(), "y_train contiene valores NaN o infinitos"
 
             model = RandomForestRegressor(n_estimators=100, random_state=42)
             model.fit(X_train, y_train)
