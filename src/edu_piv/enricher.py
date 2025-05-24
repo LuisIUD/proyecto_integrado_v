@@ -14,22 +14,19 @@ class Enricher:
 
             for col in cols_numericas:
                 if df[col].dtype == 'object':
-                    # Elimina separadores de miles y ajusta separador decimal
                     df[col] = (
                         df[col]
-                        .str.replace('.', '', regex=False)  # quita separadores de miles
-                        .str.replace(',', '.', regex=False)  # cambia coma por punto decimal
+                        .str.replace('.', '', regex=False)
+                        .str.replace(',', '.', regex=False)
                     )
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # Asegura que 'cerrar' existe antes de calcular KPIs
             if 'cerrar' in df.columns:
-                df['volatilidad'] = df['cerrar'].rolling(window=5).std().fillna(0)
-                df['retorno_diario'] = df['cerrar'].pct_change().fillna(0)
-                df['retorno_acumulado'] = (1 + df['retorno_diario']).cumprod() - 1
-                df['media_movil_10'] = df['cerrar'].rolling(window=10).mean().fillna(method='bfill')
-                df['desviacion_std_10'] = df['cerrar'].rolling(window=10).std().fillna(0)
-                df['tasa_variacion'] = df['cerrar'].diff().fillna(0)
+                df['retorno_log_diario'] = np.log(df['cerrar'] / df['cerrar'].shift(1)).fillna(0)
+                df['media_movil_7d'] = df['cerrar'].rolling(window=7).mean().fillna(method='bfill')
+                df['media_movil_30d'] = df['cerrar'].rolling(window=30).mean().fillna(method='bfill')
+                df['volatilidad_7d'] = df['retorno_log_diario'].rolling(window=7).std().fillna(0)
+                df['volatilidad_30d'] = df['retorno_log_diario'].rolling(window=30).std().fillna(0)
                 self.logger.info('Enricher', 'calcular_kpi', 'Indicadores KPI agregados')
             else:
                 self.logger.warning('Enricher', 'calcular_kpi', "Columna 'cerrar' no encontrada para KPIs")
