@@ -13,7 +13,10 @@ class Enricher:
 
             for col in df.columns:
                 if col not in ["fecha", "ticker"]:
-                    df[col] = pd.to_numeric(df[col].str.replace(',', '.', regex=False), errors='coerce')
+                    if df[col].dtype == 'object':
+                        df[col] = pd.to_numeric(df[col].str.replace(',', '.', regex=False), errors='coerce')
+                    else:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
 
             # KPIs
             df['volatilidad'] = df['cerrar'].rolling(window=5).std().fillna(0)
