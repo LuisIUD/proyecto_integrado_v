@@ -50,7 +50,7 @@ def main():
             print(f"Formato de fecha no válido: {fecha_pred}")
             return
 
-    print(f" Predicción del precio de cierre para {fecha_pred.date()}: {y_pred:.2f}")
+    print(f" Predicción del precio de cierre para {fecha_pred}: {y_pred:.2f}")
 
     # Guardar la predicción
     pred_df = pd.DataFrame([{

@@ -114,3 +114,27 @@ class Enricher:
             self.logger.error('Enricher', 'establecer_fecha_como_indice', f'Error al establecer fecha como índice: {str(e)}')
             return df
 
+    def enriquecer_con_macro(self, df):
+        """
+        Fusiona el DataFrame principal con datos macroeconómicos (IXIC).
+        Requiere una columna 'ixic_cerrar' en el DataFrame para el modelado.
+        """
+        try:
+            self.logger.info('Enricher', 'enriquecer_con_macro', 'Iniciando enriquecimiento con datos macroeconómicos')
+
+            if 'ticker' not in df.columns:
+                self.logger.error('Enricher', 'enriquecer_con_macro', "Falta la columna 'ticker' en el DataFrame")
+                return df
+
+            df_ixic = df[df['ticker'] == 'IXIC'][['fecha', 'cerrar']].copy()
+            df_ixic.rename(columns={'cerrar': 'ixic_cerrar'}, inplace=True)
+
+            df_google = df[df['ticker'] != 'IXIC'].copy()
+            df_merged = pd.merge(df_google, df_ixic, on='fecha', how='left')
+
+            self.logger.info('Enricher', 'enriquecer_con_macro', 'Fusión con datos IXIC completada')
+            return df_merged
+
+        except Exception as e:
+            self.logger.error('Enricher', 'enriquecer_con_macro', f'Error al fusionar con datos macroeconómicos: {str(e)}')
+            return df
