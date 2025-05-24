@@ -92,30 +92,25 @@ class Enricher:
     def establecer_fecha_como_indice(self, df, columna_fecha='fecha'):
         try:
             df_resultado = df.copy()
+
             if columna_fecha in df_resultado.columns:
                 df_resultado[columna_fecha] = pd.to_datetime(df_resultado[columna_fecha], errors='coerce')
+                df_resultado = df_resultado.dropna(subset=[columna_fecha])
                 df_resultado.set_index(columna_fecha, inplace=True)
+                df_resultado.sort_index(inplace=True)
+
+                # Verificación extra
+                if not isinstance(df_resultado.index[-1], pd.Timestamp):
+                    self.logger.warning('Enricher', 'establecer_fecha_como_indice', 'El índice final no es un Timestamp')
+
                 self.logger.info('Enricher', 'establecer_fecha_como_indice', 'Fecha establecida como índice')
+
             else:
                 self.logger.warning('Enricher', 'establecer_fecha_como_indice', f'Columna {columna_fecha} no encontrada')
+
             return df_resultado
 
         except Exception as e:
             self.logger.error('Enricher', 'establecer_fecha_como_indice', f'Error al establecer fecha como índice: {str(e)}')
             return df
 
-    def enriquecer_con_macro(self, df):
-        try:
-            self.logger.info('Enricher', 'enriquecer_con_macro', 'Fusionando datos GOOG con índice IXIC')
-            df_macro = df[df['ticker'] == 'IXIC'].copy()
-            df_goog = df[df['ticker'] == 'GOOG'].copy()
-
-            df_macro = df_macro[['fecha', 'cerrar']].rename(columns={'cerrar': 'ixic_cerrar'})
-            df_enriquecido = pd.merge(df_goog, df_macro, on='fecha', how='left')
-
-            self.logger.info('Enricher', 'enriquecer_con_macro', 'Datos macroeconómicos añadidos')
-            return df_enriquecido
-
-        except Exception as e:
-            self.logger.error('Enricher', 'enriquecer_con_macro', f'Error al enriquecer con datos macroeconómicos: {str(e)}')
-            return df

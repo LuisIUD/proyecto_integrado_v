@@ -38,6 +38,11 @@ class Modeller:
             features = ['media_movil_7d', 'media_movil_30d', 'volatilidad_7d', 'volatilidad_30d', 'ixic_cerrar']
             df_pred = df.dropna(subset=features).copy()
 
+            # Debug: verificar tipo de índice
+            self.logger.info('Modeller', 'predecir', f'Tipo de índice: {type(df_pred.index)}')
+            if not df_pred.empty:
+                self.logger.info('Modeller', 'predecir', f'Último índice: {df_pred.index[-1]} ({type(df_pred.index[-1])})')
+
             if df_pred.empty:
                 self.logger.error("Modeller", "predecir", "No hay datos suficientes para predecir")
                 return None, None
@@ -46,14 +51,19 @@ class Modeller:
             X_pred = ultimo[features].values.reshape(1, -1)
             y_pred = self.modelo.predict(X_pred)[0]
 
-            fecha = ultimo.name if isinstance(ultimo.name, pd.Timestamp) else None
-            if fecha:
-                self.logger.info('Modeller', 'predecir', f'Predicción realizada para la fecha {fecha.strftime("%Y-%m-%d")}')
-                return y_pred, fecha.date()
-            else:
-                self.logger.warning("Modeller", "predecir", "Fecha del índice no es un Timestamp")
-                return y_pred, None
+            fecha = ultimo.name
+            if not isinstance(fecha, pd.Timestamp):
+                try:
+                    fecha = pd.to_datetime(fecha)
+                except Exception:
+                    self.logger.warning("Modeller", "predecir", "Fecha del índice no es un Timestamp ni convertible")
+                    return y_pred, None
+
+            self.logger.info('Modeller', 'predecir', f'Predicción realizada para la fecha {fecha.strftime("%Y-%m-%d")}')
+            return y_pred, fecha.date()
 
         except Exception as e:
             self.logger.error("Modeller", "predecir", f"Error al predecir: {e}")
             return None, None
+
+
