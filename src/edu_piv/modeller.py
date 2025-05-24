@@ -19,15 +19,23 @@ class Modeller:
     def preparar_df(self, df):
         try:
             df = df.copy()
-            # Eliminamos nulos y columnas no numéricas
-            df = df.dropna()
+            # Seleccionar solo columnas numéricas
             df = df.select_dtypes(include=[np.number])
-            # Variable objetivo: cerrar (precio de cierre del día siguiente)
+            
+            # Crear variable objetivo: precio de cierre del día siguiente
             df['objetivo'] = df['cerrar'].shift(-1)
+            
+            # Eliminar filas con valores nulos
             df.dropna(inplace=True)
+
+            if df.empty:
+                self.logger.warning("Modeller", "preparar_df", "El DataFrame quedó vacío tras preparar variables.")
+                return pd.DataFrame(), pd.Series(), False
+
             X = df.drop(columns=['objetivo'])
             y = df['objetivo']
             return X, y, True
+
         except Exception as e:
             self.logger.error("Modeller", "preparar_df", f"Error preparando dataset: {e}")
             return pd.DataFrame(), pd.Series(), False
@@ -44,6 +52,9 @@ class Modeller:
             model.fit(X_train, y_train)
 
             y_pred = model.predict(X_test)
+
+            # Usamos RMSE porque penaliza más los errores grandes,
+            # lo cual es importante al predecir precios financieros donde los valores extremos tienen alto impacto.
             rmse = np.sqrt(mean_squared_error(y_test, y_pred))
             self.logger.info("Modeller", "entrenar_df", f"Modelo entrenado con RMSE: {rmse:.4f}")
 
