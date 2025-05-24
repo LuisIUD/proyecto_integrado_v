@@ -46,9 +46,13 @@ class Modeller:
             X_pred = ultimo[features].values.reshape(1, -1)
             y_pred = self.modelo.predict(X_pred)[0]
 
-            fecha = ultimo.name.strftime('%Y-%m-%d') if isinstance(ultimo.name, pd.Timestamp) else 'sin_fecha'
-            self.logger.info('Modeller', 'predecir', f'Predicción realizada para la fecha {fecha}')
-            return y_pred, fecha
+            fecha = ultimo.name if isinstance(ultimo.name, pd.Timestamp) else None
+            if fecha:
+                self.logger.info('Modeller', 'predecir', f'Predicción realizada para la fecha {fecha.strftime("%Y-%m-%d")}')
+                return y_pred, fecha.date()
+            else:
+                self.logger.warning("Modeller", "predecir", "Fecha del índice no es un Timestamp")
+                return y_pred, None
 
         except Exception as e:
             self.logger.error("Modeller", "predecir", f"Error al predecir: {e}")
