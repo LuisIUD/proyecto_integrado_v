@@ -1,48 +1,43 @@
-from collector import Collector
-from enricher import Enricher
-from modeller import Modeller
+import datetime
+import logging
+import os
 
-def main():
-    print("Iniciando pipeline")
-    logger = Logger()  # <- ¡CORREGIDO!
+class CustomAdapter(logging.LoggerAdapter):
+    def process(self, msg, kwargs):
+        extra = self.extra.copy()
+        extra.update(kwargs.get("extra", {}))
+        kwargs["extra"] = extra
+        return msg, kwargs
 
-    # Recolectar datos
-    collector = Collector(logger)
-    df_raw = collector.collector_data()
-    print("Datos recolectados")
+class Logger:
+    def __init__(self):
+        os.makedirs('logs', exist_ok=True)
+        log_file = f"logs/GOOG_analysis_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
-    # Enriquecer datos
-    enricher = Enricher(logger)
-    df_fechas = enricher.formatear_fechas(df_raw)
-    print("Fechas formateadas")
+        formatter = logging.Formatter(
+            fmt='[%(asctime)s | %(name)s | %(class_name)s | %(function_name)s | %(levelname)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
 
-    df_kpis = enricher.calcular_kpi(df_fechas)
-    print("KPIs calculados")
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
 
-    df_enriquecido = enricher.enriquecer_con_macro(df_kpis)
-    print("Datos macroeconómicos añadidos")
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
 
-    df_final = enricher.establecer_fecha_como_indice(df_enriquecido)
-    print("Índice de fecha establecido")
+        base_logger = logging.getLogger("GOOGAnalysis")
+        base_logger.setLevel(logging.INFO)
+        base_logger.addHandler(file_handler)
+        base_logger.addHandler(console_handler)
+        base_logger.propagate = False
 
-    # Entrenar modelo
-    modeller = Modeller(logger)
-    modeller.entrenar(df_final)
-    print("Entrenamiento completado y modelo guardado")
+        self.logger = CustomAdapter(base_logger, {'class_name': '-', 'function_name': '-'})
 
-    # Predecir
-    prediccion, fecha = modeller.predecir(df_final)
-    print(f"Predicción para la próxima fecha ({fecha}): {prediccion:.2f}")
+    def info(self, class_name, function_name, description):
+        self.logger.info(description, extra={'class_name': class_name, 'function_name': function_name})
 
-    # Agregar predicción al DataFrame
-    df_final = df_final.copy()
-    df_final.loc[fecha] = None  # Crear nueva fila con fecha predicha
-    df_final.at[fecha, 'prediccion_cerrar'] = prediccion
-    print("Predicción agregada al DataFrame")
+    def warning(self, class_name, function_name, description):
+        self.logger.warning(description, extra={'class_name': class_name, 'function_name': function_name})
 
-    # (Opcional) Guardar el DataFrame enriquecido con predicción
-    df_final.to_csv("src/edu_piv/static/data/enriquecido_con_prediccion.csv")
-    print("DataFrame final guardado")
-
-if __name__ == "__main__":
-    main()
+    def error(self, class_name, function_name, description):
+        self.logger.error(description, extra={'class_name': class_name, 'function_name': function_name})

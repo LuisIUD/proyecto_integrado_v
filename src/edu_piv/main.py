@@ -1,4 +1,5 @@
-from edu_piv.custom_logger import Logger
+# main.py (corregido)
+from custom_logger import Logger
 from collector import Collector
 from enricher import Enricher
 from modeller import Modeller
@@ -7,7 +8,7 @@ def main():
     print("Iniciando pipeline")
 
     # Inicializar componentes
-    logger = Logger("GOOGAnalysis")
+    logger = Logger()  # ← CORREGIDO
     collector = Collector(logger)
     enricher = Enricher(logger)
     modeller = Modeller(logger)
@@ -43,6 +44,7 @@ def main():
         print(f" Predicción del precio de cierre para {fecha_pred}: {prediccion:.2f}")
 
         # Crear nueva fila con la predicción
+        import pandas as pd
         nueva_fila = {
             'abrir': None,
             'max': None,
@@ -64,13 +66,10 @@ def main():
             'prediccion_modelo': prediccion
         }
 
-        # Convertir a DataFrame y concatenar
-        import pandas as pd
         fila_pred = pd.DataFrame([nueva_fila], index=[fecha_pred])
         df_enriquecido = pd.concat([df_enriquecido, fila_pred])
         df_enriquecido.sort_index(inplace=True)
 
-        # Guardar enriquecido con predicción
         df_enriquecido.to_csv("src/edu_piv/static/data/df_enriquecido_con_prediccion.csv")
         print("Archivo con predicción guardado en: src/edu_piv/static/data/df_enriquecido_con_prediccion.csv")
     else:
