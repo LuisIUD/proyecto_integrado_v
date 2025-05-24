@@ -1,61 +1,53 @@
 from logger import Logger
 from collector import Collector
 from enricher import Enricher
-from modeller import Modeller
+from modeller import Modeller  # Asegúrate que el archivo se llama modeller.py
 import pandas as pd
+import os
 
-if __name__ == "__main__":
+
+def main():
     logger = Logger()
 
-    # Recolección de datos
+    # Paso 1: Recolección de datos
     collector = Collector(logger)
-    df = collector.collector_data()
+    df_crudo = collector.recolectar('GOOG', '2020-01-01', '2023-12-31')
+    if df_crudo.empty:
+        logger.error("Main", "main", "No se recolectaron datos.")
+        return
 
-    if df.empty:
-        logger.error("main", "__main__", "No se pudo recolectar data")
+    # Paso 2: Enriquecimiento
+    enricher = Enricher(logger)
+    df_enriquecido = enricher.formatear_fechas(df_crudo)
+    df_enriquecido = enricher.cruzar_con_ixic(df_enriquecido)
+    df_enriquecido = enricher.calcular_kpis(df_enriquecido)
+    df_enriquecido = enricher.establecer_indice_temporal(df_enriquecido)
+
+    if df_enriquecido.empty:
+        logger.error("Main", "main", "El DataFrame enriquecido está vacío.")
+        return
+
+    # Guardar datos enriquecidos
+    path_guardado = os.path.join(os.path.dirname(__file__), 'static', 'data', 'df_enriquecido.csv')
+    os.makedirs(os.path.dirname(path_guardado), exist_ok=True)
+    df_enriquecido.to_csv(path_guardado, index=False)
+    logger.info("Main", "main", f"Datos enriquecidos guardados en {path_guardado}")
+
+    # Paso 3: Modelado
+    modeller = Modeller(logger)
+    entrenado = modeller.entrenar(df_enriquecido, ticker='GOOG')
+
+    if not entrenado:
+        logger.error("Main", "main", "Falló el entrenamiento del modelo.")
+        return
+
+    # Paso 4: Predicción
+    prediccion, fecha = modeller.predecir(df_enriquecido, ticker='GOOG')
+    if prediccion is not None:
+        logger.info("Main", "main", f"Predicción para {fecha}: {prediccion:.2f}")
     else:
-        enricher = Enricher(logger)
+        logger.error("Main", "main", "No se pudo realizar la predicción.")
 
-        # 1. Formatear fechas
-        df = enricher.formatear_fechas(df)
-        print("[OK] Fechas formateadas")
-        print("[DEBUG] Shape tras formatear fechas:", df.shape)
 
-        # 2. Enriquecer datos cruzando GOOG con IXIC
-        df = enricher.enriquecer_con_macro(df)
-        print("[OK] Datos cruzados con IXIC")
-        print("[DEBUG] Shape tras fusionar con IXIC:", df.shape)
-
-        # 3. Filtrar solo datos de GOOG ya enriquecidos
-        df = df[df['ticker'] == 'GOOG'].copy()
-
-        # 4. Calcular KPIs (ya sobre GOOG + ixic_cerrar)
-        df = enricher.calcular_kpi(df)
-        print("[OK] KPIs calculados")
-        print("[DEBUG] Shape tras calcular KPIs:", df.shape)
-
-        # 5. Establecer índice temporal
-        df = enricher.establecer_fecha_como_indice(df)
-        print("[OK] Índice temporal establecido")
-        print("[DEBUG] Shape tras establecer índice:", df.shape)
-
-        if df.empty:
-            logger.error("main", "__main__", "Error: El DataFrame quedó vacío tras el enriquecimiento")
-        else:
-            # 6. Entrenamiento y predicción
-            modeller = Modeller(logger)
-            entrenado = modeller.entrenar_df(df)
-
-            if entrenado:
-                df, ok, valor_predicho, fecha_pred, fila = modeller.predecir_df(df)
-                if ok:
-                    print(f"[RESULT] Predicción del precio de cierre del próximo día ({fecha_pred}): ${valor_predicho:.2f}")
-                else:
-                    print("[ERROR] Falló la predicción")
-            else:
-                print("[ERROR] Falló el entrenamiento del modelo")
-
-            # 7. Guardar CSV con los datos enriquecidos finales
-            df.to_csv("src/edu_piv/static/data/goog_datos_enriquecidos.csv", index=True)
-            print("[OK] Datos enriquecidos guardados")
-
+if __name__ == "__main__":
+    main()
