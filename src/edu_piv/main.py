@@ -42,19 +42,22 @@ def main():
         print("No se pudo generar la predicción.")
         return
 
+    # Asegurar que fecha_pred sea datetime.date
     if isinstance(fecha_pred, str):
         try:
-            fecha_pred = datetime.strptime(fecha_pred, "%Y-%m-%d")
+            fecha_pred = datetime.strptime(fecha_pred, "%Y-%m-%d").date()
         except ValueError:
             logger.error("Main", "main", f"Formato de fecha no válido: {fecha_pred}")
             print(f"Formato de fecha no válido: {fecha_pred}")
             return
+    elif isinstance(fecha_pred, datetime):
+        fecha_pred = fecha_pred.date()
 
     print(f" Predicción del precio de cierre para {fecha_pred}: {y_pred:.2f}")
 
     # Guardar la predicción
     pred_df = pd.DataFrame([{
-        'fecha': fecha_pred.date(),
+        'fecha': fecha_pred,
         'prediccion': y_pred,
         'year': fecha_pred.year,
         'month': fecha_pred.month,
