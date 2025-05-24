@@ -1,44 +1,42 @@
-import os
-import pandas as pd
 from logger import Logger
 from collector import Collector
-import sqlite3
-
-def main():
-    # Inicialización del logger
-    logger = Logger()
-    logger.info('Main', 'main', 'Inicializando el proceso de descarga y almacenamiento.')
-
-    # Instanciamos el colector para descargar los datos
-    collector = Collector(logger=logger)
-    df = collector.collector_data()  # Método corregido
-
-    # Definir el path para el archivo CSV
-    csv_path = "src/edu_piv/static/data/goog_data.csv"
-
-    # Si el archivo CSV ya existe, leemos el histórico y agregamos los nuevos datos sin perder el histórico
-    if os.path.exists(csv_path):
-        df_historico = pd.read_csv(csv_path)
-        df = pd.concat([df_historico, df], ignore_index=True)
-        df.drop_duplicates(subset=['fecha'], inplace=True)  # Elimina duplicados por fecha
-        df.sort_values(by='fecha', inplace=True)
-        logger.info('Main', 'main', 'Datos históricos preservados y nuevos datos agregados.')
-
-    else:
-        logger.info('Main', 'main', 'No existen datos previos. Se crearán nuevos archivos.')
-
-    # Guardar el DataFrame actualizado en el archivo CSV
-    df.to_csv(csv_path, index=False)
-    logger.info('Main', 'main', f'Datos guardados en {csv_path}.')
-
-    # Guardar en base de datos SQLite (opcional)
-    db_path = 'src/edu_piv/static/data/historical.db'
-    conn = sqlite3.connect(db_path)
-    df.to_sql('historical_data', conn, if_exists='replace', index=False)
-    conn.close()
-    logger.info('Main', 'main', f'Datos guardados en SQLite en {db_path}.')
-
-    print("Datos descargados y almacenados exitosamente.")
+from enricher import Enricher
+from modeller import Modeller
+import pandas as pd
 
 if __name__ == "__main__":
-    main()
+    # Inicializar logger
+    logger = Logger()
+
+    # Recolección de datos
+    collector = Collector(logger)
+    df = collector.collector_data()
+
+    if df.empty:
+        logger.error("main", "__main__", "No se pudo recolectar data")
+    else:
+        # Enriquecimiento de datos
+        enricher = Enricher(logger)
+        df = enricher.formatear_fechas(df)
+        df = enricher.calcular_kpi(df)
+        df = enricher.establecer_fecha_como_indice(df)
+
+        if df.empty:
+            logger.error("main", "__main__", "Error al enriquecer los datos")
+        else:
+            # Entrenamiento y predicción
+            modeller = Modeller(logger)
+
+            entrenado = modeller.entrenar_df(df)
+            if entrenado:
+                df, ok, valor_predicho, fecha_pred, fila = modeller.predecir_df(df)
+
+                if ok:
+                    print(f"\n📈 Predicción del precio de cierre del próximo día ({fecha_pred}): ${valor_predicho:.2f}")
+                else:
+                    print("\n❌ Falló la predicción")
+            else:
+                print("\n❌ Falló el entrenamiento del modelo")
+
+            # Guardar datos enriquecidos opcionalmente
+            df.to_csv("src/edu_piv/static/data/datos_enriquecidos.csv", index=True)

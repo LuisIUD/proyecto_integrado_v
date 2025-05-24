@@ -2,34 +2,34 @@ import numpy as np
 import pandas as pd
 
 
-
-
 class Enricher:
-    def __init__(self,logger):
+    def __init__(self, logger):
         self.logger = logger
 
-    def calcular_kpi(self,df=pd.DataFrame()): #mínimo 5 KPI (tasa de variación, media móvil, volatilidad, retorno acumulado, desviación estándar, etc.).
+    def calcular_kpi(self, df=pd.DataFrame()):
         try:
-          df = df.copy()
-          # ordenar
-          df = df.sort_values('fecha')
-          for col in df.columns:
-             if col != "fecha":
-                df[col]= pd.to_numeric(df[col].str.replace(',', '.',regex=False),errors='coerce')
-          # 1er indicador volatilidad (desviacion de los ult. 5 dias)
-          df['volatilidad']=df['cerrar'].rolling(window=5).std().fillna(0)
-          self.logger.info('Enricher','calcular_kpi','agregar indicadores KPI')
-          return df
+            df = df.copy()
+            df = df.sort_values('fecha')
+
+            for col in df.columns:
+                if col not in ["fecha", "ticker"]:
+                    df[col] = pd.to_numeric(df[col].str.replace(',', '.', regex=False), errors='coerce')
+
+            # KPIs
+            df['volatilidad'] = df['cerrar'].rolling(window=5).std().fillna(0)
+            df['retorno_diario'] = df['cerrar'].pct_change().fillna(0)
+            df['retorno_acumulado'] = (1 + df['retorno_diario']).cumprod() - 1
+            df['media_movil_10'] = df['cerrar'].rolling(window=10).mean().fillna(method='bfill')
+            df['desviacion_std_10'] = df['cerrar'].rolling(window=10).std().fillna(0)
+            df['tasa_variacion'] = df['cerrar'].diff().fillna(0)
+
+            self.logger.info('Enricher', 'calcular_kpi', 'Indicadores KPI agregados')
+            return df
         except Exception as errores:
-          self.logger.error(f'Enricher','calcular_kpi','Error al enriquecer el df{errores}')
-          df=pd.DataFrame()
-          return df
+            self.logger.error('Enricher', 'calcular_kpi', f'Error al enriquecer el df: {errores}')
+            return pd.DataFrame()
 
     def formatear_fechas(self, df, columna_fecha='fecha'):
-        """
-        Convierte el formato de fecha, de '07 abr 2004' o '07 may 2025' a 'yyyy-mm-dd'
-        y agrega columnas year, month, day.
-        """
         self.logger.info('Enricher', 'formatear_fechas', 'Iniciando formateo de fechas')
         df_resultado = df.copy()
 
@@ -63,9 +63,6 @@ class Enricher:
             return df
 
     def completar_columnas(self, df, columna_fecha):
-        """
-        Agrega las columnas year, month, day como enteros y year_month en formato yyyy-mm
-        """
         try:
             df['year'] = df['fecha_dt'].dt.year.astype('Int64')
             df['month'] = df['fecha_dt'].dt.month.astype('Int64')
@@ -82,9 +79,6 @@ class Enricher:
             return df
 
     def establecer_fecha_como_indice(self, df, columna_fecha='fecha'):
-        """
-        Establece la columna fecha como índice del DataFrame
-        """
         try:
             df_resultado = df.copy()
             if columna_fecha in df_resultado.columns:
@@ -97,4 +91,20 @@ class Enricher:
 
         except Exception as e:
             self.logger.error('Enricher', 'establecer_fecha_como_indice', f'Error al establecer fecha como índice: {str(e)}')
+            return df
+
+    def enriquecer_con_macro(self, df):
+        try:
+            self.logger.info('Enricher', 'enriquecer_con_macro', 'Fusionando datos GOOG con índice IXIC')
+            df_macro = df[df['ticker'] == 'IXIC'].copy()
+            df_goog = df[df['ticker'] == 'GOOG'].copy()
+
+            df_macro = df_macro[['fecha', 'cerrar']].rename(columns={'cerrar': 'ixic_cerrar'})
+            df_enriquecido = pd.merge(df_goog, df_macro, on='fecha', how='left')
+
+            self.logger.info('Enricher', 'enriquecer_con_macro', 'Datos macroeconómicos añadidos')
+            return df_enriquecido
+
+        except Exception as e:
+            self.logger.error('Enricher', 'enriquecer_con_macro', f'Error al enriquecer con datos macroeconómicos: {str(e)}')
             return df
