@@ -1,11 +1,8 @@
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-#import selenium
 from logger import Logger
 import os
-
-
 
 class Collector:
     def __init__(self, logger):
@@ -48,11 +45,29 @@ class Collector:
             })
 
             df['ticker'] = ticker
+
+            # Normalizar números
+            df = self._limpiar_numeros(df)
+
+            # Guardar CSV individual por ticker
+            output_path = f"src/edu_piv/static/data/{ticker.lower()}_datos.csv"
+            df.to_csv(output_path, index=False)
+            self.logger.info("Collector", "_scrape_yahoo_table", f"Datos guardados en {output_path}")
+
             return df
 
         except Exception as e:
             self.logger.error("Collector", "_scrape_yahoo_table", f"Error para {ticker}: {e}")
             return pd.DataFrame()
+
+    def _limpiar_numeros(self, df):
+        columnas_numericas = ['abrir', 'max', 'min', 'cerrar', 'cierre_ajustado', 'volumen']
+        for col in columnas_numericas:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.replace('.', '', regex=False)  # elimina puntos (miles)
+                df[col] = df[col].str.replace(',', '.', regex=False)             # convierte coma decimal a punto
+                df[col] = pd.to_numeric(df[col], errors='coerce')                # convierte a float
+        return df
 
     def collector_data(self):
         df_list = []
