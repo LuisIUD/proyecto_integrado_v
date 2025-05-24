@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 
-
 class Enricher:
     def __init__(self, logger):
         self.logger = logger
@@ -11,22 +10,32 @@ class Enricher:
             df = df.copy()
             df = df.sort_values('fecha')
 
-            for col in df.columns:
-                if col not in ["fecha", "ticker"]:
-                    if df[col].dtype == 'object':
-                        df[col] = pd.to_numeric(df[col].str.replace(',', '.', regex=False), errors='coerce')
-                    else:
-                        df[col] = pd.to_numeric(df[col], errors='coerce')
+            cols_numericas = [col for col in df.columns if col not in ["fecha", "ticker"]]
 
-            df['volatilidad'] = df['cerrar'].rolling(window=5).std().fillna(0)
-            df['retorno_diario'] = df['cerrar'].pct_change().fillna(0)
-            df['retorno_acumulado'] = (1 + df['retorno_diario']).cumprod() - 1
-            df['media_movil_10'] = df['cerrar'].rolling(window=10).mean().fillna(method='bfill')
-            df['desviacion_std_10'] = df['cerrar'].rolling(window=10).std().fillna(0)
-            df['tasa_variacion'] = df['cerrar'].diff().fillna(0)
+            for col in cols_numericas:
+                if df[col].dtype == 'object':
+                    # Elimina separadores de miles y ajusta separador decimal
+                    df[col] = (
+                        df[col]
+                        .str.replace('.', '', regex=False)  # quita separadores de miles
+                        .str.replace(',', '.', regex=False)  # cambia coma por punto decimal
+                    )
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            self.logger.info('Enricher', 'calcular_kpi', 'Indicadores KPI agregados')
+            # Asegura que 'cerrar' existe antes de calcular KPIs
+            if 'cerrar' in df.columns:
+                df['volatilidad'] = df['cerrar'].rolling(window=5).std().fillna(0)
+                df['retorno_diario'] = df['cerrar'].pct_change().fillna(0)
+                df['retorno_acumulado'] = (1 + df['retorno_diario']).cumprod() - 1
+                df['media_movil_10'] = df['cerrar'].rolling(window=10).mean().fillna(method='bfill')
+                df['desviacion_std_10'] = df['cerrar'].rolling(window=10).std().fillna(0)
+                df['tasa_variacion'] = df['cerrar'].diff().fillna(0)
+                self.logger.info('Enricher', 'calcular_kpi', 'Indicadores KPI agregados')
+            else:
+                self.logger.warning('Enricher', 'calcular_kpi', "Columna 'cerrar' no encontrada para KPIs")
+
             return df
+
         except Exception as errores:
             self.logger.error('Enricher', 'calcular_kpi', f'Error al enriquecer el df: {errores}')
             return pd.DataFrame()
