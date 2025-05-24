@@ -3,56 +3,78 @@ from collector import Collector
 from enricher import Enricher
 from modeller import Modeller
 
-
 def main():
-    logger = Logger()
+    print("Iniciando pipeline")
+
+    # Inicializar componentes
+    logger = Logger("GOOGAnalysis")
     collector = Collector(logger)
     enricher = Enricher(logger)
     modeller = Modeller(logger)
 
-    print("Iniciando pipeline")
-
-    # 1. Recolección de datos
-    df_crudo = collector.collector_data()
-    if df_crudo.empty:
-        logger.error("Main", "main", "No se pudieron recolectar datos. Proceso detenido.")
-        print("Recolección fallida")
+    # Recolección de datos
+    df = collector.collector_data()
+    if df.empty:
+        print("No se pudieron recolectar datos.")
         return
     print("Datos recolectados")
 
-    # 2. Formatear fechas
-    df_crudo = enricher.formatear_fechas(df_crudo)
+    # Enriquecimiento
+    df = enricher.formatear_fechas(df)
     print("Fechas formateadas")
 
-    # 3. Calcular indicadores KPI
-    df_crudo = enricher.calcular_kpi(df_crudo)
+    df = enricher.calcular_kpi(df)
     print("KPIs calculados")
 
-    # 4. Enriquecer con datos macroeconómicos (IXIC)
-    df_enriquecido = enricher.enriquecer_con_macro(df_crudo)
+    df_enriquecido = enricher.enriquecer_con_macro(df)
     print("Datos macroeconómicos añadidos")
 
-    # 5. Establecer la columna fecha como índice
     df_enriquecido = enricher.establecer_fecha_como_indice(df_enriquecido)
     print("Índice de fecha establecido")
 
-    # 6. Entrenar modelo
+    # Entrenamiento
     print("Iniciando entrenamiento del modelo...")
-    entrenado = modeller.entrenar(df_enriquecido)
-    if not entrenado:
-        logger.error("Main", "main", "Entrenamiento fallido. Proceso detenido.")
-        print("Entrenamiento fallido")
-        return
+    modeller.entrenar(df_enriquecido)
     print("Entrenamiento completado y modelo guardado")
 
-    # 7. Realizar predicción
-    prediccion, fecha = modeller.predecir(df_enriquecido)
-    if prediccion is not None:
-        print(f"Predicción para {fecha}: {prediccion:.2f}")
-    else:
-        logger.error("Main", "main", "Error al realizar la predicción.")
-        print("Error al predecir")
+    # Predicción
+    prediccion, fecha_pred = modeller.predecir(df_enriquecido)
+    if prediccion is not None and fecha_pred is not None:
+        print(f" Predicción del precio de cierre para {fecha_pred}: {prediccion:.2f}")
 
+        # Crear nueva fila con la predicción
+        nueva_fila = {
+            'abrir': None,
+            'max': None,
+            'min': None,
+            'cerrar': None,
+            'cierre_ajustado': None,
+            'volumen': None,
+            'ticker': 'GOOG',
+            'year': fecha_pred.year,
+            'month': fecha_pred.month,
+            'day': fecha_pred.day,
+            'year_month': fecha_pred.strftime('%Y-%m'),
+            'retorno_log_diario': None,
+            'media_movil_7d': None,
+            'media_movil_30d': None,
+            'volatilidad_7d': None,
+            'volatilidad_30d': None,
+            'ixic_cerrar': None,
+            'prediccion_modelo': prediccion
+        }
+
+        # Convertir a DataFrame y concatenar
+        import pandas as pd
+        fila_pred = pd.DataFrame([nueva_fila], index=[fecha_pred])
+        df_enriquecido = pd.concat([df_enriquecido, fila_pred])
+        df_enriquecido.sort_index(inplace=True)
+
+        # Guardar enriquecido con predicción
+        df_enriquecido.to_csv("src/edu_piv/static/data/df_enriquecido_con_prediccion.csv")
+        print("Archivo con predicción guardado en: src/edu_piv/static/data/df_enriquecido_con_prediccion.csv")
+    else:
+        print(" No se pudo realizar la predicción.")
 
 if __name__ == "__main__":
     main()

@@ -1,76 +1,55 @@
+import joblib
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
-import joblib
-import os
 
 class Modeller:
-    def __init__(self, logger):
+    def __init__(self, logger, modelo_path='src/edu_piv/static/models/model.pkl'):
         self.logger = logger
-        self.model = None
-        self.model_path = "src/edu_piv/static/models/model.pkl"
-        os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
+        self.modelo_path = modelo_path
+        self.modelo = None
 
-    def preparar_datos(self, df, ticker='GOOG'):
+    def entrenar(self, df):
         try:
-            df_filtrado = df[df['ticker'] == ticker].copy()
-            columnas_kpi = [
-                'retorno_log_diario',
-                'media_movil_7d',
-                'media_movil_30d',
-                'volatilidad_7d',
-                'volatilidad_30d'
-            ]
+            self.logger.info('Modeller', 'entrenar', 'Iniciando entrenamiento del modelo...')
+            features = ['media_movil_7d', 'media_movil_30d', 'volatilidad_7d', 'volatilidad_30d', 'ixic_cerrar']
+            df_model = df.dropna(subset=features + ['cerrar'])
 
-            print("Columnas disponibles:", df_filtrado.columns.tolist())
-            for col in columnas_kpi:
-                if col not in df_filtrado.columns:
-                    self.logger.error("Modeller", "preparar_datos", f"Falta columna: {col}")
-                    print(f" Falta columna: {col}")
-                    return None, None, False
+            X = df_model[features]
+            y = df_model['cerrar']
 
-            df_filtrado = df_filtrado.dropna(subset=columnas_kpi + ['cerrar'])
-            X = df_filtrado[columnas_kpi]
-            y = df_filtrado['cerrar']
-
-            if X.empty or y.empty:
-                self.logger.warning("Modeller", "preparar_datos", "X o y están vacíos después del dropna.")
-                print(" Datos vacíos tras limpieza.")
-                return None, None, False
-
-            print(" Datos preparados correctamente.")
-            print("X shape:", X.shape)
-            print("y shape:", y.shape)
-            return X, y, True
-
-        except Exception as e:
-            self.logger.error("Modeller", "preparar_datos", f"Error preparando datos: {str(e)}")
-            print(f" Error preparando datos: {str(e)}")
-            return None, None, False
-
-    def entrenar(self, df, ticker='GOOG'):
-        try:
-            X, y, valido = self.preparar_datos(df, ticker)
-
-            if not valido:
-                self.logger.error("Modeller", "entrenar", "Datos insuficientes o inválidos para entrenamiento.")
-                print("X Entrenamiento cancelado: datos inválidos.")
-                return False
-
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            self.model = LinearRegression()
-            self.model.fit(X_train, y_train)
-
-            score = self.model.score(X_test, y_test)
+            model = LinearRegression()
+            model.fit(X, y)
+            score = model.score(X, y)
+            joblib.dump(model, self.modelo_path)
+            self.logger.info('Modeller', 'entrenar', f'Modelo entrenado con score R2: {score:.4f}')
             print(f" Modelo entrenado. Score (R²): {score:.4f}")
-            self.logger.info("Modeller", "entrenar", f"Modelo entrenado con score R2: {score:.4f}")
-
-            print("Guardando modelo en:", self.model_path)
-            joblib.dump(self.model, self.model_path)
-            print(" Modelo guardado exitosamente.")
-            return True
+            return model
 
         except Exception as e:
-            self.logger.error("Modeller", "entrenar", f"Error durante entrenamiento: {str(e)}")
-            print(f" Error durante entrenamiento: {str(e)}")
-            return False
+            self.logger.error("Modeller", "entrenar", f"Error durante el entrenamiento: {e}")
+            return None
+
+    def predecir(self, df):
+        try:
+            self.logger.info('Modeller', 'predecir', 'Iniciando predicción...')
+            if self.modelo is None:
+                self.modelo = joblib.load(self.modelo_path)
+
+            features = ['media_movil_7d', 'media_movil_30d', 'volatilidad_7d', 'volatilidad_30d', 'ixic_cerrar']
+            df_pred = df.dropna(subset=features).copy()
+
+            if df_pred.empty:
+                self.logger.error("Modeller", "predecir", "No hay datos suficientes para predecir")
+                return None, None
+
+            ultimo = df_pred.iloc[-1]
+            X_pred = ultimo[features].values.reshape(1, -1)
+            y_pred = self.modelo.predict(X_pred)[0]
+
+            fecha = ultimo.name.strftime('%Y-%m-%d') if isinstance(ultimo.name, pd.Timestamp) else 'sin_fecha'
+            self.logger.info('Modeller', 'predecir', f'Predicción realizada para la fecha {fecha}')
+            return y_pred, fecha
+
+        except Exception as e:
+            self.logger.error("Modeller", "predecir", f"Error al predecir: {e}")
+            return None, None
