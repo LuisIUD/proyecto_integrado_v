@@ -18,8 +18,12 @@ if __name__ == "__main__":
         # Enriquecimiento de datos
         enricher = Enricher(logger)
         df = enricher.formatear_fechas(df)
+        print("✅ Fechas formateadas")
         df = enricher.calcular_kpi(df)
+        print("✅ KPIs calculados")
         df = enricher.establecer_fecha_como_indice(df)
+        print("✅ Índice temporal establecido")
+        print("📊 Shape final del DataFrame enriquecido:", df.shape)
 
         if df.empty:
             logger.error("main", "__main__", "Error al enriquecer los datos")

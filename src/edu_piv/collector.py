@@ -12,7 +12,7 @@ class Collector:
         self.logger = logger
         self.urls = {
             'GOOG': 'https://es.finance.yahoo.com/quote/GOOG/history/',
-            'IXIC': 'https://finance.yahoo.com/quote/%5EIXIC/history'
+            'IXIC': 'https://es.finance.yahoo.com/quote/%5EIXIC/history'
         }
         os.makedirs('src/edu_piv/static/data', exist_ok=True)
 
