@@ -20,12 +20,20 @@ def main():
     enricher = Enricher(logger)
     df_data = enricher.formatear_fechas(df_data)
     print("Fechas formateadas")
+
     df_data = enricher.calcular_kpi(df_data)
     print("KPIs calculados")
+
+    # Guardar CSV enriquecido solo para GOOG
+    df_data[df_data["ticker"] == "GOOG"].to_csv("src/edu_piv/static/data/goog_datos_enriquecidos.csv", index=False)
+    print("CSV enriquecido guardado")
+
     df_data = enricher.enriquecer_con_macro(df_data)
     print("Datos macroeconómicos añadidos")
+
     df_data = enricher.establecer_fecha_como_indice(df_data)
     print("Índice de fecha establecido")
+
 
     # Paso 3: Modelado
     print("Iniciando entrenamiento del modelo...")
