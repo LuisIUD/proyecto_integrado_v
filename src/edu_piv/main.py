@@ -5,6 +5,12 @@ from enricher import Enricher
 from modeller import Modeller
 from custom_logger import Logger
 
+"""
+Pipeline ETL orquestador.
+Responsable de coordinar los distintos componentes del flujo de datos
+en un entorno automatizado mediante CI/CD.
+"""
+
 def main():
     logger = Logger("GOOGAnalysis")
 
